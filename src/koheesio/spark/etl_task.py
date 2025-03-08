@@ -8,6 +8,7 @@ import datetime
 
 from koheesio import Step
 from koheesio.models import Field, InstanceOf, conlist
+from koheesio.models.error_handler import ErrorHandler
 from koheesio.spark import DataFrame
 from koheesio.spark.readers import Reader
 from koheesio.spark.transformations import Transformation
@@ -36,6 +37,7 @@ class EtlTask(Step):
         Series of transformations [transform]. The order of the transformations is important!
     target : koheesio.steps.writers.Writer
         Target to write to [load]
+    handlers : TODO
 
 
     Example
@@ -83,6 +85,10 @@ class EtlTask(Step):
         default_factory=list, description="Series of transformations", alias="transforms"
     )
     target: InstanceOf[Writer] = Field(default=..., description="Target to write to [load]")
+    handlers: conlist(min_length=0, item_type=InstanceOf[ErrorHandler]) = Field(
+        default_factory=list,
+        description="Handlers to catch and handle errors",
+    )
 
     # private attrs
     etl_date: datetime = Field(
@@ -111,7 +117,16 @@ class EtlTask(Step):
         logging is handled by the Transformation.execute()-method's @do_execute decorator
         """
         for t in self.transformations:
-            df = t.transform(df)
+            try:
+                df = t.transform(df)
+            except Exception as e:
+                for h in self.handlers:
+                    if h.can_handle(e):
+                        h.handle(e)
+                        break
+                else:
+                    raise e
+
         return df
 
     def load(self, df: DataFrame) -> DataFrame:

@@ -7,6 +7,7 @@ import yaml
 
 from koheesio.context import Context
 from koheesio.models import BaseModel, ExtraParamsMixin
+from koheesio.models.error_handler import BaseErrorHandler
 
 
 class TestBaseModel:
@@ -231,3 +232,28 @@ class TestExtraParamsMixin:
             "params": {"c": 3},
             "name": "SimpleModelWithExtraParams",
         }
+
+
+class TestErrorHandler:
+    class KeyErrorHandler(BaseErrorHandler):
+        """Handler for KeyError exceptions."""
+
+        catch = [KeyError]
+        message: str = "Caught a KeyError"
+
+    def test_can_handle(self):
+        handler = self.KeyErrorHandler()
+        assert handler.can_handle(KeyError())
+
+    def test_can_not_handle(self):
+        handler = self.KeyErrorHandler()
+        assert not handler.can_handle(IOError())
+
+    def test_handler_raises(self):
+        handler = self.KeyErrorHandler()
+        with pytest.raises(KeyError):
+            handler.handle(KeyError())
+
+    def test_handler_warns(self):
+        handler = self.KeyErrorHandler(action="warn", message="This is a warning")
+        handler.handle(KeyError())
